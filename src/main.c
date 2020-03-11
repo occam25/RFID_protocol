@@ -3,68 +3,89 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <time.h>
 
 #include "server.h"
 #include "tag.h"
 
-static uint8_t id[ID_LENGTH];
-static uint8_t pid[ID_LENGTH] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-static uint8_t pid2[ID_LENGTH] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x01};
-static uint8_t active_pid[ID_LENGTH];
-static uint8_t k1[ID_LENGTH];
-static uint8_t k2[ID_LENGTH];
+static uint64_t id;
+static uint64_t pid = 0x01EEF785A7CD9001;
+static uint64_t pid2 = 0x025EF9877ABB1C8D;
+static uint64_t active_pid;
+static uint64_t k1;
+static uint64_t k2;
 
-static uint8_t server_certificate[CERT_LEN];
+static uint64_t server_certificate;
 
 int main(void) {
-//	printf("ID: %s\n", id);
-//	printf("K1:   0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X\n",
-//			k1[0], k1[1], k1[2], k1[3], k1[4], k1[5]);
-//	printf("K2:   0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X\n",
-//			k2[0], k2[1], k2[2], k2[3], k2[4], k2[5]);
-//	printf("Pid:  0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X\n",
-//			pid[0], pid[1], pid[2], pid[3], pid[4], pid[5]);
-//	printf("Pid2: 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X\n",
-//			pid2[0], pid2[1], pid2[2], pid2[3], pid2[4], pid2[5]);
 
 	// Step 1: Server certificate request
 	printf("Getting server certificate...\n");
 	uint8_t result;
-	result = server_certificate_request(server_certificate, sizeof(server_certificate)/sizeof(server_certificate[0]));
+	result = server_certificate_request(&server_certificate);
 	if(result != 0){
 		fprintf(stderr, "Server authentication failed\n");
 		return 1;
 	}
-	printf("CERT: 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X\n",
-			server_certificate[0], server_certificate[1], server_certificate[2],
-			server_certificate[3], server_certificate[4], server_certificate[5]);
+	printf("CERT: %lX\n", server_certificate);
 
 	// Step 2: Active Pid request
 	// First try to get pid2
 	printf("Requesting tag's Pid...\n");
-	result = tag_request(NULL, active_pid, sizeof(active_pid)/sizeof(active_pid[0]));
+	result = tag_request(0, &active_pid);
 	if(result != 0){
 		fprintf(stderr, "Pid request failed\n");
 		return 1;
 	}
-	printf("Current Pid: 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X\n",
-			active_pid[0], active_pid[1], active_pid[2], active_pid[3], active_pid[4], active_pid[5]);
+	printf("Current Pid: %lX\n",active_pid);
 
 	// Step 3: Request keys to the server, generate n1 and n2 and compute A, B and D
 	// Request keys
 	printf("Requesting keys...\n");
-	result = server_keys_request(active_pid, sizeof(active_pid)/sizeof(active_pid[0]),
-			server_certificate, sizeof(server_certificate)/sizeof(server_certificate[0]),
-			k1, sizeof(k1)/sizeof(k1[0]), k2, sizeof(k2)/sizeof(k2[0]));
+	result = server_keys_request(active_pid, server_certificate, &k1, &k2);
 
 	if(result != 0){
 		fprintf(stderr, "Keys request failed\n");
 		return 1;
 	}
-	printf("K1:   0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X\n",
-			k1[0], k1[1], k1[2], k1[3], k1[4], k1[5]);
-	printf("K2:   0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X\n",
-			k2[0], k2[1], k2[2], k2[3], k2[4], k2[5]);
+	printf("K1: %lX\n",k1);
+	printf("K2: %lX\n",k2);
+
+	// Random numbers
+	printf("Generating random numbers...\n");
+	uint64_t n1;
+	uint64_t n2;
+	srand(time(NULL));
+	for (int i = 0; i <8; i++){
+	     int k = rand()%256;
+	     if(i)
+	    	 n1 <<= 8;
+	     n1 |= k;
+	}
+	for (int i = 0; i <8; i++){
+	     int k = rand()%256;
+	     if(i)
+	    	 n2 <<= 8;
+	     n2 |= k;
+	}
+
+	printf("n1: %lX\n",n1);
+	printf("n2: %lX\n",n2);
+
+	// Compute A, B and D
+	printf("A, B and D computation...\n");
+	uint64_t A;
+	uint64_t B;
+	uint64_t D;
+
+	A = (active_pid & k1 & k2) ^ n1;
+	B = (~active_pid & k2 & k1) ^ n2;
+	D = (k1 & n2) ^ (k2 & n1);
+
+	printf("A: %lX\n",A);
+	printf("B: %lX\n",B);
+	printf("D: %lX\n",D);
+
 
 	return EXIT_SUCCESS;
 }

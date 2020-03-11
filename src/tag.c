@@ -4,21 +4,21 @@
 #include <string.h>
 #include "tag.h"
 
-static uint8_t id[ID_LENGTH] = {'T', 'a', 'g', '1', '2', '\0'};
-static uint8_t pid[ID_LENGTH] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-static uint8_t pid2[ID_LENGTH]= {0x00, 0x00, 0x00, 0x00, 0x00, 0x01};
-static uint8_t k1[ID_LENGTH] = {0xA1, 0xB2, 0xC3, 0xD4, 0xE5, 0xF6};
-static uint8_t k2[ID_LENGTH] = {0xF1, 0xE2, 0xD3, 0xC4, 0xB5, 0xA6};
+static uint64_t id =  0xE1D896E4B5A90B18;
+static uint64_t pid = 0x01EEF785A7CD9001;
+static uint64_t pid2= 0x025EF9877ABB1C8D;
+static uint64_t k1 =  0xA1B2C3D4E5F60102;
+static uint64_t k2 =  0xF1E2D3C4B5A69788;
 
-uint8_t tag_request(uint8_t *second_pid, uint8_t *pid_to_use, uint8_t pid_len)
+uint8_t tag_request(uint8_t second_try, uint64_t *pid_to_use)
 {
-	if(pid_to_use == NULL || pid_len != ID_LENGTH)
+	if(pid_to_use == NULL)
 		return 1;
 
-	if(second_pid == NULL)
-		memcpy(pid_to_use, pid2, pid_len);
+	if(second_try)
+		*pid_to_use = pid;
 	else
-		memcpy(pid_to_use, pid, pid_len);
+		*pid_to_use = pid2;
 
 	return 0;
 
