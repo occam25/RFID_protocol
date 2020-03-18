@@ -4,19 +4,19 @@
 
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
-../src/attacker.c \
+../src/attack.c \
 ../src/main.c \
 ../src/server.c \
 ../src/tag.c 
 
 OBJS += \
-./src/attacker.o \
+./src/attack.o \
 ./src/main.o \
 ./src/server.o \
 ./src/tag.o 
 
 C_DEPS += \
-./src/attacker.d \
+./src/attack.d \
 ./src/main.d \
 ./src/server.d \
 ./src/tag.d 

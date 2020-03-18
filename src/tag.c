@@ -32,19 +32,22 @@ uint8_t tag_request(uint8_t second_try, uint64_t *pid_to_use)
 
 }
 
-uint8_t tag_compute_E_F(uint64_t A, uint64_t B, uint64_t D, uint64_t *E, uint64_t *F)
+uint8_t tag_compute_E_F(uint8_t debug, uint64_t A, uint64_t B, uint64_t D, uint64_t *E, uint64_t *F)
 {
 
-	printf("\n### TAG: computing parameters...\n");
+	if(debug)
+		printf("\n### TAG: computing parameters...\n");
 
 	n1 = A ^ (active_pid & k1 & k2);
 	n2 = B ^ (~active_pid & k2 & k1);
 
 	uint64_t computed_D = (k1 & n2) ^ (k2 & n1);
 
-	printf("TAG n1: \t%lX\n",n1);
-	printf("TAG n2: \t%lX\n",n2);
-	printf("TAG D: \t\t%lX\n",computed_D);
+	if(debug){
+		printf("TAG n1: \t%lX\n",n1);
+		printf("TAG n2: \t%lX\n",n2);
+		printf("TAG D: \t\t%lX\n",computed_D);
+	}
 
 	if(computed_D != D)
 		return 1;
@@ -54,11 +57,13 @@ uint8_t tag_compute_E_F(uint64_t A, uint64_t B, uint64_t D, uint64_t *E, uint64_
 	pid = pid2;
 	pid2 = pid2 ^ n1 ^ n2;
 
-	printf("TAG F: \t\t%lX\n",*F);
-	printf("TAG E: \t\t%lX\n",*E);
-	printf("TAG ID: \t%lX\n", id);
-	printf("TAG pid: \t%lX\n",pid);
-	printf("TAG pid2: \t%lX\n",pid2);
+	if(debug){
+		printf("TAG F: \t\t%lX\n",*F);
+		printf("TAG E: \t\t%lX\n",*E);
+		printf("TAG ID: \t%lX\n", id);
+		printf("TAG pid: \t%lX\n",pid);
+		printf("TAG pid2: \t%lX\n",pid2);
+	}
 
 	return 0;
 }

@@ -30,7 +30,7 @@ uint8_t server_keys_request(uint64_t current_pid, uint64_t cert, uint64_t *key1,
 	if(key1 == NULL ||key2 == NULL)
 		return 1;
 
-	if((cert != certificate)||((current_pid != pid)&&(current_pid != pid2)))
+	if(cert != certificate)
 		return 1;
 
 	*key1 = k1;
