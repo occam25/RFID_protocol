@@ -36,8 +36,6 @@ uint8_t tag_compute_E_F(uint64_t A, uint64_t B, uint64_t D, uint64_t *E, uint64_
 {
 
 	printf("\n### TAG: computing parameters...\n");
-//	n1 = A ^ (active_pid & k1);
-//	n2 = B ^ (~active_pid & k2);
 
 	n1 = A ^ (active_pid & k1 & k2);
 	n2 = B ^ (~active_pid & k2 & k1);

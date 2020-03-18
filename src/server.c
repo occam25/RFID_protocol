@@ -10,7 +10,6 @@
 
 static uint64_t certificate = 0x265AE8FFB113B53E;
 
-static uint64_t id =  0xE1D896E4B5A90B18;
 static uint64_t pid = 0x01EEF785A7CD9001;
 static uint64_t pid2= 0x025EF9877ABB1C8D;
 static uint64_t k1 =  0xA1B2C3D4E5F60102;

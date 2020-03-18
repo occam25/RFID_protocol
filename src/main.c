@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <time.h>
+#include <gio/gio.h>
 
 #include "server.h"
 #include "tag.h"
@@ -118,6 +119,12 @@ int main(void) {
 	printf("Reader ID: \t%lX\n", id);
 	printf("Reader pid: \t%lX\n", pid);
 	printf("Reader pid2: \t%lX\n", pid2);
+
+	// Tests
+//	uint64_t id_atck = ~(E ^ F);
+//	printf("Attacker ID: \t%lX\n",id_atck);
+//	if(id_atck == id)
+//		printf("MATCH!!!");
 
 	return EXIT_SUCCESS;
 }
