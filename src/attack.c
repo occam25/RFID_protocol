@@ -90,7 +90,8 @@ uint8_t attack_try_aproximation(uint64_t true_value, uint8_t mask)
 	}
 	return 0;
 }
-#define SESSIONS	100
+#define SESSIONS			100
+#undef DEBUG_ESTIMATION
 uint64_t attack_compute_estimation(void)
 {
 	uint64_t A;
@@ -101,6 +102,7 @@ uint64_t attack_compute_estimation(void)
 	uint64_t value;
 	uint8_t mask;
 
+
 	uint16_t added_bits[64] = {};
 	uint64_t estimation = 0;
 
@@ -108,7 +110,9 @@ uint64_t attack_compute_estimation(void)
 	uint8_t i;
 	for(int j = 0; j < SESSIONS; j++){
 		trigger_new_session(0, &A, &B, &D, &E, &F);
+#ifdef DEBUG_ESTIMATION
 		printf("%08lX %08lX %08lX %08lX %08lX\n", A, B, D, E, F);
+#endif
 		i = 0;
 		while(good_aproximations[i].type != 0){
 			mask = good_aproximations[i].type;
@@ -119,14 +123,21 @@ uint64_t attack_compute_estimation(void)
 //			printf("Type: 0x%02X: %lX\n", mask, value);
 			for(int j = 0; j < 64; j++){
 				uint8_t bit = (value >> j) & 0x01;
+#ifdef DEBUG_ESTIMATION
 				printf("%c ", (bit) ? '1' : '0');
+#endif
 				added_bits[j] += bit;
 			}
+#ifdef DEBUG_ESTIMATION
 			putchar('\n');
+#endif
 			i++;
 		}
+#ifdef DEBUG_ESTIMATION
 		printf("%.128s\n", "--------------------------------------------------------------------------------------------------------------------------------");
+#endif
 	}
+#ifdef DEBUG_ESTIMATION
 	for(int j = 0; j < 64; j++){
 		if(j)
 			printf(" %d", added_bits[j]);
@@ -135,31 +146,36 @@ uint64_t attack_compute_estimation(void)
 	}
 	putchar('\n');
 	printf("N = %d\n", (i * SESSIONS)/2);
+#endif
 	for(int j = 0; j < 64; j++){
 		uint64_t pos = 1;
 		pos = pos << j;
 		if(added_bits[j] >= (i * SESSIONS)/2){
 			estimation |= pos; //(uint64_t)(1 << j);
+#ifdef DEBUG_ESTIMATION
 			if(j == 0)
 				printf("1");
 			else
 				printf(" 1");
+#endif
 		}else{
 			estimation &= ~pos; //(uint64_t)(~(1 << j));
+#ifdef DEBUG_ESTIMATION
 			if(j == 0)
 				printf("0");
 			else
 				printf(" 0");
+#endif
 		}
 	}
+#ifdef DEBUG_ESTIMATION
 	putchar('\n');
-
 	for(int j = 0; j < 64; j++){
 		uint8_t bit = (estimation >> j) & 0x01;
 		printf("%c ", (bit) ? '1' : '0');
 	}
 	putchar('\n');
-
+#endif
 	return estimation;
 }
 

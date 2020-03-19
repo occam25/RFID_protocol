@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <time.h>
+#include <string.h>
+#include <getopt.h>
 
 #include "main.h"
 #include "server.h"
@@ -21,7 +23,10 @@ static uint64_t server_certificate;
 
 static unsigned int seed;
 
+const char *program_name;
+
 uint8_t do_attack(uint64_t true_value, uint64_t *estimation);
+void print_usage(FILE* stream, int exit_code);
 
 uint8_t trigger_new_session(uint8_t debug, uint64_t *a, uint64_t *b, uint64_t *d, uint64_t *e, uint64_t *f)
 {
@@ -172,15 +177,57 @@ static uint8_t hamming_distance(uint64_t a, uint64_t b)
     return setBits;
 }
 
-int main(void) {
+int main(int argc, char* argv[]) {
 
+	int next_option;
+	const char *short_options = "hs:";
+	const struct option long_options[] = {
+		{ "help", 0, NULL, 'h' },
+		{ "secret", 1, NULL, 's' },
+		{ NULL, 0, NULL, 0 }
+	};
 	uint64_t A;
 	uint64_t B;
 	uint64_t D;
 	uint64_t E;
 	uint64_t F;
-
 	uint8_t result;
+
+	const char *secret_to_reveal = "ID";
+
+	program_name = argv[0];
+	do{
+		next_option = getopt_long (argc, argv, short_options, long_options, NULL);
+		switch (next_option)
+		{
+		case 'h':
+			print_usage (stdout, 0);
+			break;
+		case 's':
+			secret_to_reveal = optarg;
+			break;
+		case '?': /* The user specified an invalid option. */
+			print_usage (stderr, 1);
+			break;
+		case -1: /* Done with options. */
+			break;
+		default: /* Something else: unexpected. */
+			abort ();
+		}
+	}while (next_option != -1);
+
+	uint64_t *secret;
+
+	if(strcmp(secret_to_reveal, "id") == 0){
+		secret = &id;
+	}else if(strcmp(secret_to_reveal, "k1") == 0){
+		secret = &k1;
+	}else if(strcmp(secret_to_reveal, "k2") == 0){
+		secret = &k2;
+	}else{
+		fprintf(stderr, "Invalid option: %s\n", secret_to_reveal);
+		print_usage(stderr, 1);
+	}
 
 	seed = time(NULL);
 
@@ -192,16 +239,36 @@ int main(void) {
 
 	// Attack
 	uint64_t estimation;
-
+	printf("\n##################################################################################################\n");
+	printf("Launching attack...\n");
 	do{
-		result = do_attack(id, &estimation);
-	}while(result != 0);
+		result = do_attack(*secret, &estimation);
+		uint8_t dH = hamming_distance(*secret, estimation);
+		printf("Distance: %02d\r", dH);
+		if(dH == 1){
+			// only one bit is different, try all
+			for(int i = 0; i < 64; i++){
+				uint64_t tmp = estimation;
+				uint8_t bit = (tmp >> i) & 0x01;
+				// Negate the bit
+				if(bit)
+					tmp &= ~(1 << i);
+				else
+					tmp |= (1 << i);
+				// Compare
+				if(tmp == *secret){
+					estimation = tmp;
+					break;
+				}
+			}
+		}
+	}while(estimation != *secret); //result != 0);
+	putchar('\n');
+	printf("Real %s: \t%lX\n", secret_to_reveal, *secret);
+	printf("Estimated %s: \t%lX\n", secret_to_reveal, estimation);
+//	printf("Distance: %d\n", hamming_distance(*secret, estimation));
 
-	printf("Real ID: \t%lX\n", id);
-	printf("Estimated ID: \t%lX\n", estimation);
-	printf("Distance: %d\n", hamming_distance(id, estimation));
-
-	if(estimation == id)
+	if(estimation == *secret)
 		printf("MATCH!! \n");
 
 	return EXIT_SUCCESS;
@@ -276,9 +343,9 @@ uint8_t do_attack(uint64_t true_value, uint64_t *estimation)
 	index = attack_try_aproximation(true_value, XOR_A | XOR_B | XOR_D | XOR_E | XOR_F);
 
 	index = attack_get_index();
-	for(int i = 0; i < index; i++){
-		printf("Good aproximation %s0x%02X\n", (good_aproximations[i].inv == 1) ? "~" : " ", good_aproximations[i].type);
-	}
+//	for(int i = 0; i < index; i++){
+//		printf("Good aproximation %s0x%02X\n", (good_aproximations[i].inv == 1) ? "~" : " ", good_aproximations[i].type);
+//	}
 
 	if(index == 0)
 		return 1;
@@ -288,3 +355,11 @@ uint8_t do_attack(uint64_t true_value, uint64_t *estimation)
 	return 0;
 }
 
+void print_usage(FILE* stream, int exit_code)
+{
+	fprintf (stream, "Usage: %s options [ inputfile ... ]\n", program_name);
+	fprintf (stream,
+		" -h --help \t\tDisplay this usage information.\n"
+		" -s --secret \t\tSecret to attack (id, k1 or k2).\n");
+	exit(exit_code);
+}
