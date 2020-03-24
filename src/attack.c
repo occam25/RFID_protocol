@@ -76,13 +76,13 @@ uint8_t attack_try_aproximation(uint64_t true_value, uint8_t mask)
 
 	uint8_t result = check_aproximation(dH);
 	if(result == GOOD_APROX){
-//		printf("Good aproximation! (0x%02X)\n", mask);
+		printf("Good aproximation! (0x%02X)\n", mask);
 		good_aproximations[index].type = mask;
 		good_aproximations[index].inv = 0;
 		index++;
 		return index;
 	}else if(result == GOOD_APROX_INV){
-//		printf("Good aproximation! (inv) (~0x%02X)\n", mask);
+		printf("Good aproximation! (inv) (~0x%02X)\n", mask);
 		good_aproximations[index].type = mask;
 		good_aproximations[index].inv = 1;
 		index++;

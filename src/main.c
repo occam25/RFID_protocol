@@ -277,6 +277,9 @@ int main(int argc, char* argv[]) {
 uint8_t do_attack(uint64_t true_value, uint64_t *estimation)
 {
 	uint8_t index;
+	static uint16_t cnt = 0;
+	printf("############# ATTACK #%d\n", cnt++);
+
 	// ID
 	// Search for good aproximations
 	// 1. Aprox = A
@@ -350,6 +353,7 @@ uint8_t do_attack(uint64_t true_value, uint64_t *estimation)
 	if(index == 0)
 		return 1;
 
+	printf("INDEX: %d\n", index);
 	*estimation = attack_compute_estimation();
 
 	return 0;

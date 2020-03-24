@@ -15,7 +15,7 @@
 #define XOR_E			0x08
 #define XOR_F			0x10
 
-#define NUM_OF_APROXIMATIONS	31
+#define NUM_OF_APROXIMATIONS	32
 
 typedef struct good_aproxs {
 	uint8_t type;
