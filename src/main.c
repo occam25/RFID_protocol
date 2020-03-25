@@ -25,7 +25,7 @@ static unsigned int seed;
 
 const char *program_name;
 
-uint8_t do_attack(uint64_t true_value, uint64_t *estimation);
+uint8_t generate_aproximations(uint64_t true_value);
 void print_usage(FILE* stream, int exit_code);
 
 uint8_t trigger_new_session(uint8_t debug, uint64_t *a, uint64_t *b, uint64_t *d, uint64_t *e, uint64_t *f)
@@ -180,10 +180,13 @@ static uint8_t hamming_distance(uint64_t a, uint64_t b)
 int main(int argc, char* argv[]) {
 
 	int next_option;
-	const char *short_options = "hs:";
+	const char *short_options = "hs:u:d:a";
 	const struct option long_options[] = {
 		{ "help", 0, NULL, 'h' },
 		{ "secret", 1, NULL, 's' },
+		{ "dhup", 1, NULL, 'u' },
+		{ "dhdown", 1, NULL, 'd' },
+		{ "auto", 0, NULL, 'a' },
 		{ NULL, 0, NULL, 0 }
 	};
 	uint64_t A;
@@ -194,6 +197,8 @@ int main(int argc, char* argv[]) {
 	uint8_t result;
 
 	const char *secret_to_reveal = "ID";
+	uint8_t value;
+	uint8_t auto_dh = 0;
 
 	program_name = argv[0];
 	do{
@@ -205,6 +210,25 @@ int main(int argc, char* argv[]) {
 			break;
 		case 's':
 			secret_to_reveal = optarg;
+			break;
+		case 'u':
+			value = atoi(optarg);
+			if((value >= DH_UP_MIN)&&(value <= DH_UP_MAX)){
+				attack_set_dh_up_limit(value);
+			}else
+				print_usage (stderr, 1);
+			break;
+		case 'd':
+			value = atoi(optarg);
+			if((value >= DH_DONW_MIN)&&(value <= DH_DOWN_MAX)){
+				attack_set_dh_down_limit(value);
+			}else
+				print_usage (stderr, 1);
+			break;
+		case 'a':
+			attack_set_dh_up_limit(DH_UP_MAX);
+			attack_set_dh_down_limit(DH_DONW_MIN);
+			auto_dh = 1;
 			break;
 		case '?': /* The user specified an invalid option. */
 			print_usage (stderr, 1);
@@ -240,11 +264,44 @@ int main(int argc, char* argv[]) {
 	// Attack
 	uint64_t estimation;
 	printf("\n##################################################################################################\n");
-	printf("Launching attack...\n");
+	printf("Generating good aproximations...\n");
+	result = generate_aproximations(*secret);
+	if(auto_dh && result != 0){
+		do{
+			result = attack_reduce_dh_limits();
+			if(result != 0){
+				printf("No good aproximations found. Aborting attack\n");
+				return 1;
+			}
+			result = generate_aproximations(*secret);
+		}while(result != 0);
+		printf("Good aproximations generated with dH <= %d || dH >= %d\n", attack_get_dh_down_limit(), attack_get_dh_up_limit());
+	}else if(result != 0){
+		printf("No good aproximations found. Aborting attack\n");
+		return 1;
+	}
+
+	uint8_t best_distance = 0xff;
+	uint8_t best_local_distance = 0xff;
+	time_t last = time(NULL);
+	t_best_estimation best_estimation;
 	do{
-		result = do_attack(*secret, &estimation);
+		// Compute new estimation
+		estimation = attack_compute_estimation();
+		// Compute estimation's Hamming distance
 		uint8_t dH = hamming_distance(*secret, estimation);
-		printf("Distance: %02d\r", dH);
+		if(dH < best_local_distance)
+			best_local_distance = dH;
+
+		if(dH < best_distance){
+			best_distance = dH;
+			best_estimation.distance = dH;
+			best_estimation.estimation = estimation;
+			best_estimation.dh_down = attack_get_dh_down_limit();
+			best_estimation.dh_up = attack_get_dh_up_limit();
+			best_estimation.number_of_aproximations = attack_get_index();
+		}
+		printf("Estimation: %016lX Distance: %02d (best: %02d) (local best: %02d)\r", estimation, dH, best_distance, best_local_distance);
 		if(dH == 1){
 			// only one bit is different, try all
 			for(int i = 0; i < 64; i++){
@@ -261,89 +318,118 @@ int main(int argc, char* argv[]) {
 					break;
 				}
 			}
+
+		}
+
+		if(auto_dh && ((unsigned int)(time(NULL) - last)) > 10){
+			last = time(NULL);
+
+			// time out, recalculate aproximations
+			uint8_t end = 0;
+			do{
+				end = attack_reduce_dh_limits();
+				if(end != 0){
+					printf("\nAll dh limits tested\n");
+					printf("############# BEST ESTIMATION ############\n");
+					printf("\t%16lX Best_dH=%d (dH <= %d || dH >= %d) - %d aproximations\n", best_estimation.estimation,
+							best_estimation.distance, best_estimation.dh_down, best_estimation.dh_up,
+							best_estimation.number_of_aproximations);
+					break;
+				}
+				printf("\nBest distance for this range: %02d\n", best_local_distance);
+				printf("############################# Re-generating ######################################\n");
+				best_local_distance = 0xff;
+				result = generate_aproximations(*secret);
+			}while(result != 0);
+			if(end){
+				break;
+			}
+			printf("Good aproximations re-generated (dH <= %d || dH >= %d)\n", attack_get_dh_down_limit(), attack_get_dh_up_limit());
+//			printf("###################################################################\n");
 		}
 	}while(estimation != *secret); //result != 0);
+
 	putchar('\n');
 	printf("Real %s: \t%lX\n", secret_to_reveal, *secret);
-	printf("Estimated %s: \t%lX\n", secret_to_reveal, estimation);
+	printf("Estimated %s: \t%lX\n", secret_to_reveal, best_estimation.estimation);
 //	printf("Distance: %d\n", hamming_distance(*secret, estimation));
 
-	if(estimation == *secret)
+	if(best_estimation.estimation == *secret)
 		printf("MATCH!! \n");
 
 	return EXIT_SUCCESS;
 }
 
-uint8_t do_attack(uint64_t true_value, uint64_t *estimation)
+
+uint8_t generate_aproximations(uint64_t true_value)
 {
 	uint8_t index;
-	static uint16_t cnt = 0;
-	printf("############# ATTACK #%d\n", cnt++);
 
+	attack_reset_aproximations();
 	// ID
 	// Search for good aproximations
 	// 1. Aprox = A
-	index = attack_try_aproximation(true_value, XOR_A);
+	attack_try_aproximation(true_value, XOR_A);
 	// 2. Aprox = B
-	index = attack_try_aproximation(true_value, XOR_B);
+	attack_try_aproximation(true_value, XOR_B);
 	// 3. Aprox = D
-	index = attack_try_aproximation(true_value, XOR_D);
+	attack_try_aproximation(true_value, XOR_D);
 	// 4. Aprox = E
-	index = attack_try_aproximation(true_value, XOR_E);
+	attack_try_aproximation(true_value, XOR_E);
 	// 5. Aprox = F
-	index = attack_try_aproximation(true_value, XOR_F);
+	attack_try_aproximation(true_value, XOR_F);
 	// 6. Aprox = A ^ B
-	index = attack_try_aproximation(true_value, XOR_A | XOR_B);
+	attack_try_aproximation(true_value, XOR_A | XOR_B);
 	// 7. Aprox = A ^ D
-	index = attack_try_aproximation(true_value, XOR_A | XOR_D);
+	attack_try_aproximation(true_value, XOR_A | XOR_D);
 	// 8. Aprox = A ^ E
-	index = attack_try_aproximation(true_value, XOR_A | XOR_E);
+	attack_try_aproximation(true_value, XOR_A | XOR_E);
 	// 9. Aprox = A ^ F
-	index = attack_try_aproximation(true_value, XOR_A | XOR_F);
+	attack_try_aproximation(true_value, XOR_A | XOR_F);
 	// 10. Aprox = B ^ D
-	index = attack_try_aproximation(true_value, XOR_B | XOR_D);
+	attack_try_aproximation(true_value, XOR_B | XOR_D);
 	// 11. Aprox = B ^ E
-	index = attack_try_aproximation(true_value, XOR_B | XOR_E);
+	attack_try_aproximation(true_value, XOR_B | XOR_E);
 	// 12. Aprox = B ^ F
-	index = attack_try_aproximation(true_value, XOR_B | XOR_F);
+	attack_try_aproximation(true_value, XOR_B | XOR_F);
 	// 13. Aprox = D ^ E
-	index = attack_try_aproximation(true_value, XOR_D | XOR_E);
+	attack_try_aproximation(true_value, XOR_D | XOR_E);
 	// 14. Aprox = D ^ F
-	index = attack_try_aproximation(true_value, XOR_D | XOR_F);
+	attack_try_aproximation(true_value, XOR_D | XOR_F);
 	// 15. Aprox = E ^ F
-	index = attack_try_aproximation(true_value, XOR_E | XOR_F);
+	attack_try_aproximation(true_value, XOR_E | XOR_F);
 	// 16. Aprox = A ^ B ^ D
-	index = attack_try_aproximation(true_value, XOR_A | XOR_B | XOR_D);
+	attack_try_aproximation(true_value, XOR_A | XOR_B | XOR_D);
 	// 17. Aprox = A ^ B ^ E
-	index = attack_try_aproximation(true_value, XOR_A | XOR_B | XOR_E);
+	attack_try_aproximation(true_value, XOR_A | XOR_B | XOR_E);
 	// 18. Aprox = A ^ B ^ F
-	index = attack_try_aproximation(true_value, XOR_A | XOR_B | XOR_F);
+	attack_try_aproximation(true_value, XOR_A | XOR_B | XOR_F);
 	// 19. Aprox = A ^ D ^ E
-	index = attack_try_aproximation(true_value, XOR_A | XOR_D | XOR_E);
+	attack_try_aproximation(true_value, XOR_A | XOR_D | XOR_E);
 	// 20. Aprox = A ^ D ^ F
-	index = attack_try_aproximation(true_value, XOR_A | XOR_D | XOR_F);
+	attack_try_aproximation(true_value, XOR_A | XOR_D | XOR_F);
 	// 21. Aprox = A ^ E ^ F
-	index = attack_try_aproximation(true_value, XOR_A | XOR_E | XOR_F);
+	attack_try_aproximation(true_value, XOR_A | XOR_E | XOR_F);
 	// 22. Aprox = B ^ D ^ E
-	index = attack_try_aproximation(true_value, XOR_B | XOR_D | XOR_E);
+	attack_try_aproximation(true_value, XOR_B | XOR_D | XOR_E);
 	// 23. Aprox = B ^ D ^ F
-	index = attack_try_aproximation(true_value, XOR_B | XOR_D | XOR_F);
+	attack_try_aproximation(true_value, XOR_B | XOR_D | XOR_F);
 	// 24. Aprox = B ^ E ^ F
-	index = attack_try_aproximation(true_value, XOR_B | XOR_E | XOR_F);
+	attack_try_aproximation(true_value, XOR_B | XOR_E | XOR_F);
 	// 25. Aprox = D ^ E ^ F
-	index = attack_try_aproximation(true_value, XOR_D | XOR_E | XOR_F);
+	attack_try_aproximation(true_value, XOR_D | XOR_E | XOR_F);
 	// 26. Aprox = A ^ B ^ D ^ E
-	index = attack_try_aproximation(true_value, XOR_A | XOR_B | XOR_D | XOR_E);
+	attack_try_aproximation(true_value, XOR_A | XOR_B | XOR_D | XOR_E);
 	// 27. Aprox = A ^ B ^ D ^ F
-	index = attack_try_aproximation(true_value, XOR_A | XOR_B | XOR_D | XOR_F);
+	attack_try_aproximation(true_value, XOR_A | XOR_B | XOR_D | XOR_F);
 	// 28. Aprox = A ^ B ^ E ^ F
-	index = attack_try_aproximation(true_value, XOR_A | XOR_B | XOR_E | XOR_F);
+	attack_try_aproximation(true_value, XOR_A | XOR_B | XOR_E | XOR_F);
 	// 29. Aprox = A ^ D ^ E ^ F
-	index = attack_try_aproximation(true_value, XOR_A | XOR_D | XOR_E | XOR_F);
+	attack_try_aproximation(true_value, XOR_A | XOR_D | XOR_E | XOR_F);
 	// 30. Aprox = B ^ D ^ E ^ F
-	index = attack_try_aproximation(true_value, XOR_B | XOR_D | XOR_E | XOR_F);
+	attack_try_aproximation(true_value, XOR_B | XOR_D | XOR_E | XOR_F);
 	// 31. Aprox = A ^ B ^ D ^ E ^ F
-	index = attack_try_aproximation(true_value, XOR_A | XOR_B | XOR_D | XOR_E | XOR_F);
+	attack_try_aproximation(true_value, XOR_A | XOR_B | XOR_D | XOR_E | XOR_F);
 
 	index = attack_get_index();
 //	for(int i = 0; i < index; i++){
@@ -353,8 +439,7 @@ uint8_t do_attack(uint64_t true_value, uint64_t *estimation)
 	if(index == 0)
 		return 1;
 
-	printf("INDEX: %d\n", index);
-	*estimation = attack_compute_estimation();
+	printf("Number of good aproximations: %d\n", index);
 
 	return 0;
 }
@@ -364,6 +449,10 @@ void print_usage(FILE* stream, int exit_code)
 	fprintf (stream, "Usage: %s options [ inputfile ... ]\n", program_name);
 	fprintf (stream,
 		" -h --help \t\tDisplay this usage information.\n"
-		" -s --secret \t\tSecret to attack (id, k1 or k2).\n");
+		" -s --secret \t\tSecret to attack (id, k1 or k2).\n"
+		" -u --dhup \t\tdh up limit (min: %d max:%d default:%d).\n"
+		" -d --dhdown \t\tdh down limit (min: %d max:%d default:%d).\n",
+		DH_UP_MIN, DH_UP_MAX, DH_UP_LIMIT,
+		DH_DONW_MIN, DH_DOWN_MAX, DH_DOWN_LIMIT);
 	exit(exit_code);
 }
