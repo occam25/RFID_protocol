@@ -7,19 +7,22 @@ C_SRCS += \
 ../src/attack.c \
 ../src/main.c \
 ../src/server.c \
-../src/tag.c 
+../src/tag.c \
+../src/utils.c 
 
 OBJS += \
 ./src/attack.o \
 ./src/main.o \
 ./src/server.o \
-./src/tag.o 
+./src/tag.o \
+./src/utils.o 
 
 C_DEPS += \
 ./src/attack.d \
 ./src/main.d \
 ./src/server.d \
-./src/tag.d 
+./src/tag.d \
+./src/utils.d 
 
 
 # Each subdirectory must supply rules for building sources it contributes

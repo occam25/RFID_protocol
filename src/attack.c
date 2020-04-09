@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 #include "main.h"
@@ -103,7 +104,6 @@ uint8_t attack_get_index(void)
 
 uint8_t attack_try_aproximation(uint64_t true_value, uint8_t mask)
 {
-
 	uint16_t dH;
 
 	if(idx > NUM_OF_APROXIMATIONS - 1)
@@ -114,20 +114,45 @@ uint8_t attack_try_aproximation(uint64_t true_value, uint8_t mask)
 
 	uint8_t result = check_aproximation(dH);
 	if(result == GOOD_APROX){
-		printf("Good aproximation! (0x%02X)\n", mask);
+//		printf("Good aproximation! (0x%02X)\n", mask);
 		good_aproximations[idx].type = mask;
 		good_aproximations[idx].inv = 0;
+		good_aproximations[idx].dH = dH;
 		idx++;
 		return idx;
 	}else if(result == GOOD_APROX_INV){
-		printf("Good aproximation! (inv) (~0x%02X)\n", mask);
+//		printf("Good aproximation! (inv) (~0x%02X)\n", mask);
 		good_aproximations[idx].type = mask;
 		good_aproximations[idx].inv = 1;
+		good_aproximations[idx].dH = 64 - dH;
 		idx++;
 		return idx;
 	}
 	return 0;
 }
+
+int compare(const void *v1, const void *v2)
+{
+    const t_good_aproximations *p1 = (t_good_aproximations *)v1;
+    const t_good_aproximations *p2 = (t_good_aproximations *)v2;
+    if (p1->dH < p2->dH)
+        return -1;
+    else if (p1->dH > p2->dH)
+        return 1;
+    else
+        return 0;
+}
+
+void attack_remove_worst_aproximation(void)
+{
+
+	qsort(good_aproximations, idx, sizeof(good_aproximations[0]), compare);
+
+	good_aproximations[idx-1].type = 0;
+	idx--;
+
+}
+
 #define SESSIONS			100
 #undef DEBUG_ESTIMATION
 uint64_t attack_compute_estimation(void)

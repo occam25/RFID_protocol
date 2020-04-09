@@ -10,9 +10,9 @@
 
 static uint64_t certificate = 0x265AE8FFB113B53E;
 
-static uint64_t pid = 0x01EEF785A7CD9001;
-static uint64_t pid2= 0x025EF9877ABB1C8D;
-static uint64_t k1 =  0xA1B2C3D4E5F60102;
+//static uint64_t pid = 0x01EEF785A7CD9001;
+//static uint64_t pid2= 0x025EF9877ABB1C8D;
+static uint64_t k1 =  0x14B19F91BC391F4A; //0xA1B2C3D4E5F60102;
 static uint64_t k2 =  0xF1E2D3C4B5A69788;
 
 uint8_t server_certificate_request(uint64_t *cert)

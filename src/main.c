@@ -11,7 +11,7 @@
 #include "server.h"
 #include "tag.h"
 #include "attack.h"
-
+#include "utils.h"
 
 static uint64_t id;
 static uint64_t pid;
@@ -27,6 +27,8 @@ const char *program_name;
 
 uint8_t generate_aproximations(uint64_t true_value);
 void print_usage(FILE* stream, int exit_code);
+
+uint8_t rotate;
 
 uint8_t trigger_new_session(uint8_t debug, uint64_t *a, uint64_t *b, uint64_t *d, uint64_t *e, uint64_t *f)
 {
@@ -105,8 +107,13 @@ uint8_t trigger_new_session(uint8_t debug, uint64_t *a, uint64_t *b, uint64_t *d
 	uint64_t B;
 	uint64_t D;
 
-	A = (active_pid & k1 & k2) ^ n1;
-	B = (~active_pid & k2 & k1) ^ n2;
+	if(rotate){
+		A = (active_pid & right_rotate(k1,10) & k2) ^ n1;
+		B = (~active_pid & right_rotate(k2,15) & k1) ^ n2;
+	}else{
+		A = (active_pid & k1 & k2) ^ n1;
+		B = (~active_pid & k2 & k1) ^ n2;
+	}
 	D = (k1 & n2) ^ (k2 & n1);
 
 	if(debug){
@@ -121,7 +128,7 @@ uint8_t trigger_new_session(uint8_t debug, uint64_t *a, uint64_t *b, uint64_t *d
 	if(debug)
 		printf("Reader: sending A, B and D to the tag...\n");
 
-	result = tag_compute_E_F(debug, A, B, D, &E, &F);
+	result = tag_compute_E_F(debug, rotate, A, B, D, &E, &F);
 
 	if(result != 0){
 		printf("\nReader authentication failed\n");
@@ -131,7 +138,13 @@ uint8_t trigger_new_session(uint8_t debug, uint64_t *a, uint64_t *b, uint64_t *d
 	if(debug)
 		printf("\n### Reader authentication succeeded!! Checking Tag...\n");
 
-	uint64_t computed_F = (k1 & n1) ^ (k2 & n2);
+	uint64_t computed_F;
+
+//	if(rotate)
+//		computed_F = (right_rotate(k1,n2) & n1) ^ (right_rotate(k2,n1) & n2);
+//	else
+		computed_F = (k1 & n1) ^ (k2 & n2);
+
 	if(debug)
 		printf("Reader F: \t%lX\n",computed_F);
 
@@ -180,13 +193,14 @@ static uint8_t hamming_distance(uint64_t a, uint64_t b)
 int main(int argc, char* argv[]) {
 
 	int next_option;
-	const char *short_options = "hs:u:d:a";
+	const char *short_options = "hs:u:d:ar";
 	const struct option long_options[] = {
 		{ "help", 0, NULL, 'h' },
 		{ "secret", 1, NULL, 's' },
 		{ "dhup", 1, NULL, 'u' },
 		{ "dhdown", 1, NULL, 'd' },
 		{ "auto", 0, NULL, 'a' },
+		{ "rotate", 0, NULL, 'r' },
 		{ NULL, 0, NULL, 0 }
 	};
 	uint64_t A;
@@ -229,6 +243,9 @@ int main(int argc, char* argv[]) {
 			attack_set_dh_up_limit(DH_UP_MAX);
 			attack_set_dh_down_limit(DH_DONW_MIN);
 			auto_dh = 1;
+			break;
+		case 'r':
+			rotate = 1;
 			break;
 		case '?': /* The user specified an invalid option. */
 			print_usage (stderr, 1);
@@ -303,22 +320,60 @@ int main(int argc, char* argv[]) {
 		}
 		printf("Estimation: %016lX Distance: %02d (best: %02d) (local best: %02d)\r", estimation, dH, best_distance, best_local_distance);
 		if(dH == 1){
+			printf("Only one bit missing, trying brute force\n");
 			// only one bit is different, try all
-			for(int i = 0; i < 64; i++){
+//			for(int i = 0; i < 64; i++){
+			for(int i = 63; i >= 0; i--){
 				uint64_t tmp = estimation;
 				uint8_t bit = (tmp >> i) & 0x01;
 				// Negate the bit
 				if(bit)
-					tmp &= ~(1 << i);
+					tmp &= ~((uint64_t)1 << i);
 				else
-					tmp |= (1 << i);
+					tmp |= ((uint64_t)1 << i);
 				// Compare
 				if(tmp == *secret){
 					estimation = tmp;
+					best_estimation.estimation = tmp;
+//					printf("FOUND! estimation: %lX  secret: %lX\n", estimation, *secret);
 					break;
 				}
 			}
-
+		}else if(dH == 2){
+			printf("Only two bit missing, trying brute force\n");
+			// only two bit is different, try all
+			uint8_t found = 0;
+			for(int i = 63; i >= 0; i--){
+				uint64_t i_tmp = estimation;
+				uint8_t i_bit = (i_tmp >> i) & 0x01;
+				// Negate the bit
+				if(i_bit)
+					i_tmp &= ~((uint64_t)1 << i);
+				else
+					i_tmp |= ((uint64_t)1 << i);
+				// Check all the other bits
+				for(int j = 63; j >= 0; j--){
+					uint64_t j_tmp = i_tmp;
+					if(j == i)
+						continue;
+					uint8_t j_bit = (j_tmp >> j) & 0x01;
+					// Negate the bit
+					if(j_bit)
+						j_tmp &= ~((uint64_t)1 << j);
+					else
+						j_tmp |= ((uint64_t)1 << j);
+					// Compare
+					if(j_tmp == *secret){
+						estimation = j_tmp;
+						best_estimation.estimation = j_tmp;
+						found = 1;
+	//					printf("FOUND! estimation: %lX  secret: %lX\n", estimation, *secret);
+						break;
+					}
+				}
+				if(found)
+					break;
+			}
 		}
 
 		if(auto_dh && ((unsigned int)(time(NULL) - last)) > 10){
@@ -345,9 +400,8 @@ int main(int argc, char* argv[]) {
 				break;
 			}
 			printf("Good aproximations re-generated (dH <= %d || dH >= %d)\n", attack_get_dh_down_limit(), attack_get_dh_up_limit());
-//			printf("###################################################################\n");
 		}
-	}while(estimation != *secret); //result != 0);
+	}while(estimation != *secret);
 
 	putchar('\n');
 	printf("Real %s: \t%lX\n", secret_to_reveal, *secret);
@@ -432,12 +486,17 @@ uint8_t generate_aproximations(uint64_t true_value)
 	attack_try_aproximation(true_value, XOR_A | XOR_B | XOR_D | XOR_E | XOR_F);
 
 	index = attack_get_index();
-//	for(int i = 0; i < index; i++){
-//		printf("Good aproximation %s0x%02X\n", (good_aproximations[i].inv == 1) ? "~" : " ", good_aproximations[i].type);
-//	}
-
 	if(index == 0)
 		return 1;
+
+	if(index % 2 == 0){
+		attack_remove_worst_aproximation();
+		index = attack_get_index();
+	}
+
+	for(int i = 0; i < index;i++){
+		printf("Good aproximation: %c0x%02X (%02d)\n", (good_aproximations[i].inv) ? '~' : ' ', good_aproximations[i].type, good_aproximations[i].dH);
+	}
 
 	printf("Number of good aproximations: %d\n", index);
 
@@ -446,12 +505,14 @@ uint8_t generate_aproximations(uint64_t true_value)
 
 void print_usage(FILE* stream, int exit_code)
 {
-	fprintf (stream, "Usage: %s options [ inputfile ... ]\n", program_name);
+	fprintf (stream, "Usage: %s options\n", program_name);
 	fprintf (stream,
 		" -h --help \t\tDisplay this usage information.\n"
 		" -s --secret \t\tSecret to attack (id, k1 or k2).\n"
 		" -u --dhup \t\tdh up limit (min: %d max:%d default:%d).\n"
-		" -d --dhdown \t\tdh down limit (min: %d max:%d default:%d).\n",
+		" -d --dhdown \t\tdh down limit (min: %d max:%d default:%d).\n"
+		" -a --auto \t\tAdapt dh range automatically.\n"
+		" -r --rotate \t\tInsert some rotations to make it harder to crack.\n",
 		DH_UP_MIN, DH_UP_MAX, DH_UP_LIMIT,
 		DH_DONW_MIN, DH_DOWN_MAX, DH_DOWN_LIMIT);
 	exit(exit_code);
