@@ -110,18 +110,15 @@ uint8_t attack_try_aproximation(uint64_t true_value, uint8_t mask)
 		return 0;
 
 	dH = compute_aproximation(true_value, mask);
-//	printf("0x%02X = %d\n", mask, dH);
 
 	uint8_t result = check_aproximation(dH);
 	if(result == GOOD_APROX){
-//		printf("Good aproximation! (0x%02X)\n", mask);
 		good_aproximations[idx].type = mask;
 		good_aproximations[idx].inv = 0;
 		good_aproximations[idx].dH = dH;
 		idx++;
 		return idx;
 	}else if(result == GOOD_APROX_INV){
-//		printf("Good aproximation! (inv) (~0x%02X)\n", mask);
 		good_aproximations[idx].type = mask;
 		good_aproximations[idx].inv = 1;
 		good_aproximations[idx].dH = 64 - dH;

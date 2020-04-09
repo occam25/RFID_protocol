@@ -140,9 +140,9 @@ uint8_t trigger_new_session(uint8_t debug, uint64_t *a, uint64_t *b, uint64_t *d
 
 	uint64_t computed_F;
 
-//	if(rotate)
-//		computed_F = (right_rotate(k1,n2) & n1) ^ (right_rotate(k2,n1) & n2);
-//	else
+	if(rotate)
+		computed_F = (right_rotate(k1,n2) & n1) ^ (right_rotate(k2,n1) & n2);
+	else
 		computed_F = (k1 & n1) ^ (k2 & n2);
 
 	if(debug)
@@ -335,7 +335,6 @@ int main(int argc, char* argv[]) {
 				if(tmp == *secret){
 					estimation = tmp;
 					best_estimation.estimation = tmp;
-//					printf("FOUND! estimation: %lX  secret: %lX\n", estimation, *secret);
 					break;
 				}
 			}
@@ -367,7 +366,6 @@ int main(int argc, char* argv[]) {
 						estimation = j_tmp;
 						best_estimation.estimation = j_tmp;
 						found = 1;
-	//					printf("FOUND! estimation: %lX  secret: %lX\n", estimation, *secret);
 						break;
 					}
 				}
